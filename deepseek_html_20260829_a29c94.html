@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>青岛美食 & 摄影机位地图</title>
+
+    <!-- Leaflet CSS (开源地图库) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+    </script>
+
+    <style>
+        /* ==================== CSS 变量 ==================== */
+        :root {
+            --food-color: #FF6B35;
+            /* 美食点位主色 - 暖橙 */
+            --photo-color: #4A90D9;
+            /* 摄影点位主色 - 冷蓝 */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #1a1a2e;
+            --text-secondary: #555566;
+            --border-color: #e0e0e8;
+            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.12);
+            --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.18);
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            --header-height: 60px;
+            --header-height-mobile: 52px;
+        }
+
+        /* ==================== 全局重置 ==================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        /* 输入框允许选择文本 */
+        input,
+        textarea,
+        [contenteditable] {
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        /* ==================== 顶部栏 ==================== */
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            height: var(--header-height);
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            gap: 10px;
+            box-shadow: 0 1px 8px rgba(0, 0, 0, 0.05);
+        }
+        .top-bar .title {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .top-bar .title .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+        .top-bar .title .dot.food-dot {
+            background: var(--food-color);
+        }
+        .top-bar .title .dot.photo-dot {
+            background: var(--photo-color);
+        }
+
+        .top-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: nowrap;
+        }
+
+        /* 筛选按钮组 */
+        .filter-group {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .filter-btn {
+            border: 2px solid var(--border-color);
+            background: var(--bg-primary);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: var(--text-secondary);
+            letter-spacing: 0.3px;
+        }
+        .filter-btn .icon-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+        .filter-btn.active-food {
+            border-color: var(--food-color);
+            color: var(--food-color);
+            background: #fff5f0;
+        }
+        .filter-btn.active-photo {
+            border-color: var(--photo-color);
+            color: var(--photo-color);
+            background: #f0f6ff;
+        }
+        .filter-btn.active-food .icon-dot {
+            background: var(--food-color);
+        }
+        .filter-btn.active-photo .icon-dot {
+            background: var(--photo-color);
+        }
+        .filter-btn:not(.active-food):not(.active-photo) .icon-dot {
+            background: #ccc;
+        }
+
+        /* 通用按钮 */
+        .btn {
+            padding: 7px 14px;
+            border-radius: var(--radius-sm);
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+            letter-spacing: 0.3px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+        .btn:hover {
+            background: #e9ecef;
+            border-color: #d0d0d8;
+        }
+        .btn-primary {
+            background: var(--text-primary);
+            color: #fff;
+            border-color: var(--text-primary);
+        }
+        .btn-primary:hover {
+            background: #2d2d44;
+            border-color: #2d2d44;
+        }
+        .btn-danger {
+            background: #fee;
+            color: #d32f2f;
+            border-color: #f5c6c6;
+        }
+        .btn-danger:hover {
+            background: #fdd;
+            border-color: #e8a0a0;
+        }
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+        }
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 16px;
+        }
+
+        /* ==================== 地图容器 ==================== */
+        #map {
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1;
+            background: #e8e8e8;
+        }
+
+        /* 定位到青岛按钮 */
+        .locate-btn {
+            position: fixed;
+            right: 16px;
+            bottom: 32px;
+            z-index: 500;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-md);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: var(--transition);
+            color: var(--text-primary);
+        }
+        .locate-btn:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+        .locate-btn:active {
+            transform: translateY(0);
+        }
+
+        /* ==================== 底部面板（表单/详情） ==================== */
+        .panel-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 900;
+            background: rgba(0, 0, 0, 0.35);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .panel-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .panel-container {
+            position: fixed;
+            z-index: 1000;
+            left: 50%;
+            transform: translateX(-50%) translateY(100%);
+            bottom: 0;
+            width: 100%;
+            max-width: 620px;
+            max-height: 82vh;
+            background: var(--bg-primary);
+            border-radius: 20px 20px 0 0;
+            box-shadow: var(--shadow-lg);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+        .panel-container.visible {
+            transform: translateX(-50%) translateY(0);
+        }
+        .panel-container::-webkit-scrollbar {
+            width: 4px;
+        }
+        .panel-container::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 2px;
+        }
+
+        /* 面板头部 */
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 20px 12px;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            background: var(--bg-primary);
+            z-index: 5;
+            border-radius: 20px 20px 0 0;
+        }
+        .panel-header h2 {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+        .panel-close-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: none;
+            background: var(--bg-secondary);
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            color: var(--text-secondary);
+        }
+        .panel-close-btn:hover {
+            background: #e9ecef;
+            color: var(--text-primary);
+        }
+
+        /* 面板内容 */
+        .panel-body {
+            padding: 16px 20px 24px;
+        }
+
+        /* ==================== 表单样式 ==================== */
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+            letter-spacing: 0.3px;
+        }
+        .form-group input[type="text"],
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            transition: var(--transition);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            outline: none;
+            font-family: inherit;
+            letter-spacing: 0.3px;
+        }
+        .form-group input[type="text"]:focus,
+        .form-group textarea:focus {
+            border-color: var(--photo-color);
+            box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.12);
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 70px;
+            line-height: 1.5;
+        }
+
+        /* 类型切换按钮 */
+        .type-toggle-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        .type-toggle-btn {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            border: 2px solid var(--border-color);
+            background: var(--bg-primary);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 700;
+            transition: var(--transition);
+            text-align: center;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .type-toggle-btn .toggle-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .type-toggle-btn.food-btn .toggle-dot {
+            background: var(--food-color);
+        }
+        .type-toggle-btn.photo-btn .toggle-dot {
+            background: var(--photo-color);
+        }
+        .type-toggle-btn.active-food {
+            border-color: var(--food-color);
+            color: var(--food-color);
+            background: #fff5f0;
+        }
+        .type-toggle-btn.active-photo {
+            border-color: var(--photo-color);
+            color: var(--photo-color);
+            background: #f0f6ff;
+        }
+
+        /* 图片上传区域 */
+        .image-upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            background: var(--bg-secondary);
+        }
+        .image-upload-area:hover {
+            border-color: #aaa;
+            background: #f0f0f2;
+        }
+        .image-upload-area .upload-icon {
+            font-size: 28px;
+            margin-bottom: 6px;
+        }
+        .image-upload-area p {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .image-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .image-preview-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            background: #f5f5f5;
+        }
+        .image-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .image-preview-item .remove-img-btn {
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+        }
+        .image-preview-item .remove-img-btn:hover {
+            background: rgba(200, 0, 0, 0.8);
+        }
+
+        /* 表单底部按钮 */
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 18px;
+            flex-wrap: wrap;
+        }
+        .form-actions .btn {
+            flex: 1;
+            min-width: 80px;
+            justify-content: center;
+            padding: 12px 16px;
+            font-size: 14px;
+        }
+        .btn-save-food {
+            background: var(--food-color);
+            color: #fff;
+            border-color: var(--food-color);
+        }
+        .btn-save-food:hover {
+            background: #e55a2b;
+            border-color: #e55a2b;
+        }
+        .btn-save-photo {
+            background: var(--photo-color);
+            color: #fff;
+            border-color: var(--photo-color);
+        }
+        .btn-save-photo:hover {
+            background: #3a7bc8;
+            border-color: #3a7bc8;
+        }
+
+        /* ==================== 详情视图 ==================== */
+        .detail-type-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+        .detail-type-badge.badge-food {
+            background: #fff5f0;
+            color: var(--food-color);
+            border: 1.5px solid var(--food-color);
+        }
+        .detail-type-badge.badge-photo {
+            background: #f0f6ff;
+            color: var(--photo-color);
+            border: 1.5px solid var(--photo-color);
+        }
+        .detail-name {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: 0.3px;
+        }
+        .detail-field {
+            margin-bottom: 10px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .detail-field .field-label {
+            font-weight: 700;
+            color: var(--text-secondary);
+            font-size: 13px;
+            letter-spacing: 0.3px;
+            display: block;
+            margin-bottom: 2px;
+        }
+        .detail-field .field-value {
+            color: var(--text-primary);
+        }
+        .detail-images {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .detail-images img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .detail-images img:hover {
+            transform: scale(1.03);
+        }
+        .detail-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+        .detail-actions .btn {
+            flex: 1;
+            min-width: 80px;
+            justify-content: center;
+            padding: 10px 14px;
+        }
+        .detail-coord {
+            font-size: 12px;
+            color: #999;
+            margin-top: 10px;
+            letter-spacing: 0.3px;
+        }
+
+        /* ==================== Leaflet 自定义样式覆盖 ==================== */
+        .leaflet-container {
+            font-family: inherit;
+            cursor: crosshair;
+        }
+        .custom-marker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            font-size: 14px;
+            color: #fff;
+            font-weight: 700;
+            transition: transform 0.2s ease;
+            cursor: pointer;
+            text-align: center;
+            line-height: 1;
+        }
+        .custom-marker:hover {
+            transform: scale(1.2);
+        }
+        .custom-marker.marker-food {
+            background: var(--food-color);
+        }
+        .custom-marker.marker-photo {
+            background: var(--photo-color);
+        }
+        .leaflet-tooltip {
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 4px;
+            padding: 4px 10px;
+            letter-spacing: 0.3px;
+        }
+
+        /* ==================== 响应式设计 ==================== */
+        @media (max-width: 768px) {
+            :root {
+                --header-height: var(--header-height-mobile);
+            }
+            .top-bar {
+                padding: 0 10px;
+                gap: 6px;
+            }
+            .top-bar .title {
+                font-size: 14px;
+                gap: 5px;
+            }
+            .top-bar .title .dot {
+                width: 6px;
+                height: 6px;
+            }
+            .filter-btn {
+                padding: 5px 9px;
+                font-size: 11px;
+                gap: 3px;
+                border-radius: 16px;
+                border-width: 1.5px;
+            }
+            .btn {
+                padding: 6px 10px;
+                font-size: 11px;
+                gap: 3px;
+            }
+            .btn-sm {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+            .panel-container {
+                max-height: 75vh;
+                border-radius: 16px 16px 0 0;
+            }
+            .panel-header {
+                padding: 14px 16px 10px;
+                border-radius: 16px 16px 0 0;
+            }
+            .panel-header h2 {
+                font-size: 16px;
+            }
+            .panel-body {
+                padding: 12px 16px 20px;
+            }
+            .form-group input[type="text"],
+            .form-group textarea {
+                padding: 9px 12px;
+                font-size: 13px;
+            }
+            .type-toggle-btn {
+                padding: 10px 12px;
+                font-size: 13px;
+            }
+            .form-actions .btn {
+                padding: 11px 14px;
+                font-size: 13px;
+            }
+            .detail-name {
+                font-size: 17px;
+            }
+            .custom-marker {
+                width: 28px;
+                height: 28px;
+                font-size: 12px;
+                border-width: 2px;
+            }
+            .locate-btn {
+                right: 10px;
+                bottom: 20px;
+                width: 38px;
+                height: 38px;
+                font-size: 17px;
+            }
+            .top-actions {
+                gap: 4px;
+            }
+            .top-actions .btn {
+                padding: 5px 8px;
+                font-size: 10px;
+            }
+            .top-actions .btn-icon {
+                width: 30px;
+                height: 30px;
+                font-size: 13px;
+            }
+        }
+        @media (max-width: 480px) {
+            .top-bar .title span.title-text {
+                display: none;
+                /* 超小屏隐藏标题文字，只留图标 */;
+            }
+            .filter-btn {
+                padding: 4px 7px;
+                font-size: 10px;
+                gap: 2px;
+            }
+            .filter-btn .icon-dot {
+                width: 6px;
+                height: 6px;
+            }
+            .panel-container {
+                max-height: 70vh;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ==================== 顶部栏 ==================== -->
+    <header class="top-bar">
+        <div class="title">
+            <span class="dot food-dot"></span>
+            <span class="dot photo-dot"></span>
+            <span class="title-text">青岛美食·机位地图</span>
+        </div>
+        <div class="top-actions">
+            <!-- 筛选按钮组 -->
+            <div class="filter-group">
+                <button class="filter-btn active-food" id="filterFoodBtn" title="显示/隐藏美食点位">
+                    <span class="icon-dot"></span> 美食
+                </button>
+                <button class="filter-btn active-photo" id="filterPhotoBtn" title="显示/隐藏摄影机位">
+                    <span class="icon-dot"></span> 机位
+                </button>
+            </div>
+            <!-- 导出按钮 -->
+            <button class="btn btn-sm" id="exportBtn" title="导出所有点位数据为JSON文件">导出</button>
+            <!-- 导入按钮（隐藏的file input） -->
+            <button class="btn btn-sm" id="importBtn" title="从JSON文件导入数据">导入</button>
+            <input type="file" id="importFileInput" accept=".json" style="display:none;">
+        </div>
+    </header>
+
+    <!-- ==================== 地图容器 ==================== -->
+    <div id="map"></div>
+
+    <!-- ==================== 定位到青岛按钮 ==================== -->
+    <button class="locate-btn" id="locateBtn" title="回到青岛中心">📍</button>
+
+    <!-- ==================== 面板遮罩 ==================== -->
+    <div class="panel-overlay" id="panelOverlay"></div>
+
+    <!-- ==================== 底部面板（添加/编辑/详情） ==================== -->
+    <div class="panel-container" id="panelContainer">
+        <div class="panel-header">
+            <h2 id="panelTitle">添加新点位</h2>
+            <button class="panel-close-btn" id="panelCloseBtn" title="关闭">✕</button>
+        </div>
+        <div class="panel-body" id="panelBody">
+            <!-- 动态内容由JS渲染 -->
+        </div>
+    </div>
+
+    <script>
+        /* ================================================================
+         * 青岛美食 + 摄影机位标记地图
+         * 技术栈：Leaflet.js + OpenStreetMap + localStorage
+         * 数据存储：浏览器localStorage（key: 'qingdao_map_points_v1'）
+         * ================================================================ */
+
+        // ==================== 常量与全局变量 ====================
+        const STORAGE_KEY = 'qingdao_map_points_v1';
+        const QINGDAO_CENTER = [36.067, 120.383]; // 青岛市中心坐标
+        const DEFAULT_ZOOM = 12; // 默认缩放级别
+
+        let map; // Leaflet地图实例
+        let allPoints = []; // 所有点位数据
+        let activeMarkers = {}; // 当前显示的地图标记 {id: LeafletMarker}
+        let currentPanelMode = null; // 面板模式: 'add' | 'edit' | 'view' | null
+        let currentPanelPointId = null; // 面板当前操作的点位ID
+        let currentPanelLatLng = null; // 添加新点位时的坐标
+        let currentFormType = 'food'; // 当前表单选择的类型
+        let tempFormImages = []; // 表单中临时图片dataURL数组
+        let filterFoodVisible = true; // 美食筛选状态
+        let filterPhotoVisible = true; // 摄影筛选状态
+
+        // ==================== 工具函数 ====================
+        /** 生成唯一ID */
+        function generateId() {
+            return 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        }
+
+        /** 获取当前时间戳 */
+        function getTimestamp() {
+            return Date.now();
+        }
+
+        /** 压缩图片：将图片文件压缩为最大宽度800px的JPEG dataURL */
+        function compressImage(file, maxWidth = 800, quality = 0.72) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        let w = img.width;
+                        let h = img.height;
+                        if (w > maxWidth) {
+                            h = h * (maxWidth / w);
+                            w = maxWidth;
+                        }
+                        if (h > maxWidth) {
+                            w = w * (maxWidth / h);
+                            h = maxWidth;
+                        }
+                        canvas.width = Math.round(w);
+                        canvas.height = Math.round(h);
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        const dataURL = canvas.toDataURL('image/jpeg', quality);
+                        resolve(dataURL);
+                    };
+                    img.onerror = function() {
+                        reject(new Error('图片加载失败'));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.onerror = function() {
+                    reject(new Error('文件读取失败'));
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        /** 格式化时间为可读字符串 */
+        function formatTime(timestamp) {
+            const d = new Date(timestamp);
+            return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        /** 安全存储到localStorage */
+        function saveToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(allPoints));
+            } catch (e) {
+                console.error('存储失败，可能因图片过大导致localStorage满:', e);
+                alert('⚠️ 数据存储失败，可能是图片占用空间过大。请尝试减少图片数量或降低图片质量。');
+            }
+        }
+
+        /** 从localStorage加载数据 */
+        function loadFromStorage() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                if (data) {
+                    allPoints = JSON.parse(data);
+                    if (!Array.isArray(allPoints)) allPoints = [];
+                } else {
+                    // 首次使用，加载示例数据
+                    allPoints = getSampleData();
+                    saveToStorage();
+                }
+            } catch (e) {
+                console.error('数据加载失败:', e);
+                allPoints = [];
+            }
+        }
+
+        /** 获取示例数据（首次打开时展示） */
+        function getSampleData() {
+            const now = getTimestamp();
+            return [
+                // --- 美食示例 ---
+                {
+                    id: generateId(),
+                    type: 'food',
+                    name: '船歌鱼水饺（万象城店）',
+                    lat: 36.0675,
+                    lng: 120.3792,
+                    notes: '青岛特色鱼水饺，墨鱼水饺和鲅鱼水饺是招牌。饭点人多建议提前排队。',
+                    images: [],
+                    dishes: '墨鱼水饺、鲅鱼水饺、海鲜拼盘',
+                    hours: '11:00-21:30',
+                    createdAt: now - 86400000 * 2,
+                },
+                {
+                    id: generateId(),
+                    type: 'food',
+                    name: '劈柴院小吃街',
+                    lat: 36.0712,
+                    lng: 120.3968,
+                    notes: '老青岛小吃聚集地，适合边走边吃。部分摊位晚上才出。',
+                    images: [],
+                    dishes: '锅贴、豆腐脑、烤海鲜、糖球',
+                    hours: '约10:00-22:00（各摊位不同）',
+                    createdAt: now - 86400000,
+                },
+                // --- 摄影机位示例 ---
+                {
+                    id: generateId(),
+                    type: 'photo',
+                    name: '信号山公园观景台',
+                    lat: 36.0775,
+                    lng: 120.3650,
+                    notes: '俯瞰老城区和栈桥的经典机位，需要爬一小段台阶。日落前光线最佳。',
+                    images: [],
+                    bestTime: '日落前1小时（约17:00-18:30，随季节调整）',
+                    focalLength: '24-70mm 广角到中焦，也可用16-35mm',
+                    createdAt: now - 86400000 * 3,
+                },
+                {
+                    id: generateId(),
+                    type: 'photo',
+                    name: '小麦岛公园',
+                    lat: 36.1025,
+                    lng: 120.4415,
+                    notes: '海边小岛，日出方向好，适合拍摄海景和城市天际线。',
+                    images: [],
+                    bestTime: '日出时分（约5:30-6:30，随季节调整）',
+                    focalLength: '16-35mm 广角，也可带70-200mm拍细节',
+                    createdAt: now - 86400000 * 1,
+                },
+            ];
+        }
+
+        // ==================== 地图初始化 ====================
+        function initMap() {
+            map = L.map('map', {
+                center: QINGDAO_CENTER,
+                zoom: DEFAULT_ZOOM,
+                zoomControl: true,
+                attributionControl: true,
+                worldCopyJump: true,
+            });
+
+            // 加载OpenStreetMap瓦片（成熟开源地图服务）
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                minZoom: 3,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                crossOrigin: true,
+            }).addTo(map);
+
+            // 监听地图点击事件 - 添加新点位
+            map.on('click', function(e) {
+                // 如果面板已打开，先关闭
+                if (currentPanelMode) {
+                    closePanel();
+                    return;
+                }
+                // 打开添加新点位面板
+                openAddPanel(e.latlng.lat, e.latlng.lng);
+            });
+
+            // 渲染所有点位标记
+            renderAllMarkers();
+        }
+
+        /** 创建自定义divIcon标记 */
+        function createCustomMarkerIcon(type) {
+            const size = window.innerWidth <= 768 ? 28 : 34;
+            const fontSize = window.innerWidth <= 768 ? 11 : 13;
+            const className = type === 'food' ? 'marker-food' : 'marker-photo';
+            const iconChar = type === 'food' ? '🍜' : '📷';
+            return L.divIcon({
+                className: '',
+                html: `<div class="custom-marker ${className}" style="width:${size}px;height:${size}px;font-size:${fontSize}px;">${iconChar}</div>`,
+                iconSize: [size, size],
+                iconAnchor: [size / 2, size / 2],
+                popupAnchor: [0, -size / 2],
+                tooltipAnchor: [0, -size / 2],
+            });
+        }
+
+        /** 渲染所有点位标记（根据筛选条件） */
+        function renderAllMarkers() {
+            // 清除所有现有标记
+            for (const id in activeMarkers) {
+                if (activeMarkers[id]) {
+                    map.removeLayer(activeMarkers[id]);
+                }
+            }
+            activeMarkers = {};
+
+            // 遍历点位数据，根据筛选条件添加标记
+            allPoints.forEach(point => {
+                const shouldShow = (point.type === 'food' && filterFoodVisible) ||
+                    (point.type === 'photo' && filterPhotoVisible);
+                if (!shouldShow) return;
+
+                const icon = createCustomMarkerIcon(point.type);
+                const marker = L.marker([point.lat, point.lng], { icon: icon, title: point.name })
+                    .addTo(map)
+                    .bindTooltip(point.name, { direction: 'top', offset: [0, -4] });
+
+                // 点击标记打开详情面板
+                marker.on('click', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    openViewPanel(point.id);
+                });
+
+                activeMarkers[point.id] = marker;
+            });
+        }
+
+        /** 更新单个标记（用于编辑后） */
+        function updateMarkerForPoint(pointId) {
+            const point = allPoints.find(p => p.id === pointId);
+            if (!point) return;
+
+            // 移除旧标记
+            if (activeMarkers[pointId]) {
+                map.removeLayer(activeMarkers[pointId]);
+                delete activeMarkers[pointId];
+            }
+
+            // 检查是否应该显示
+            const shouldShow = (point.type === 'food' && filterFoodVisible) ||
+                (point.type === 'photo' && filterPhotoVisible);
+            if (!shouldShow) return;
+
+            const icon = createCustomMarkerIcon(point.type);
+            const marker = L.marker([point.lat, point.lng], { icon: icon, title: point.name })
+                .addTo(map)
+                .bindTooltip(point.name, { direction: 'top', offset: [0, -4] });
+            marker.on('click', function(e) {
+                L.DomEvent.stopPropagation(e);
+                openViewPanel(point.id);
+            });
+            activeMarkers[pointId] = marker;
+        }
+
+        // ==================== 面板管理 ====================
+        /** 打开面板 */
+        function openPanel(title) {
+            document.getElementById('panelTitle').textContent = title;
+            document.getElementById('panelOverlay').classList.add('visible');
+            document.getElementById('panelContainer').classList.add('visible');
+        }
+
+        /** 关闭面板 */
+        function closePanel() {
+            document.getElementById('panelOverlay').classList.remove('visible');
+            document.getElementById('panelContainer').classList.remove('visible');
+            currentPanelMode = null;
+            currentPanelPointId = null;
+            currentPanelLatLng = null;
+            tempFormImages = [];
+            document.getElementById('panelBody').innerHTML = '';
+        }
+
+        /** 打开添加面板 */
+        function openAddPanel(lat, lng) {
+            currentPanelMode = 'add';
+            currentPanelLatLng = { lat: lat, lng: lng };
+            currentFormType = 'food';
+            tempFormImages = [];
+            openPanel('添加新点位');
+            renderAddForm(lat, lng);
+        }
+
+        /** 打开详情面板 */
+        function openViewPanel(pointId) {
+            currentPanelMode = 'view';
+            currentPanelPointId = pointId;
+            const point = allPoints.find(p => p.id === pointId);
+            if (!point) return;
+            openPanel(point.name);
+            renderViewDetail(point);
+        }
+
+        /** 打开编辑面板 */
+        function openEditPanel(pointId) {
+            currentPanelMode = 'edit';
+            currentPanelPointId = pointId;
+            const point = allPoints.find(p => p.id === pointId);
+            if (!point) return;
+            currentFormType = point.type;
+            tempFormImages = [...(point.images || [])];
+            openPanel('编辑点位');
+            renderEditForm(point);
+        }
+
+        // ==================== 表单渲染 ====================
+        /** 渲染添加表单 */
+        function renderAddForm(lat, lng) {
+            const body = document.getElementById('panelBody');
+            body.innerHTML = `
+            <!-- 类型切换 -->
+            <div class="type-toggle-group">
+              <button class="type-toggle-btn food-btn active-food" id="typeFoodBtn" onclick="setFormType('food')">
+                <span class="toggle-dot"></span> 美食点位
+              </button>
+              <button class="type-toggle-btn photo-btn" id="typePhotoBtn" onclick="setFormType('photo')">
+                <span class="toggle-dot"></span> 摄影机位
+              </button>
+            </div>
+            <!-- 名称 -->
+            <div class="form-group">
+              <label>点位名称 *</label>
+              <input type="text" id="formName" placeholder="输入名称，如：某餐厅/某观景台" maxlength="60">
+            </div>
+            <!-- 美食专属字段 -->
+            <div class="form-group" id="foodFields">
+              <label>推荐菜品</label>
+              <input type="text" id="formDishes" placeholder="如：墨鱼水饺、辣炒蛤蜊" maxlength="100">
+            </div>
+            <div class="form-group" id="foodHoursField">
+              <label>营业时间</label>
+              <input type="text" id="formHours" placeholder="如：10:00-22:00" maxlength="50">
+            </div>
+            <!-- 摄影专属字段 -->
+            <div class="form-group" id="photoFields" style="display:none;">
+              <label>最佳拍摄时间</label>
+              <input type="text" id="formBestTime" placeholder="如：日落前1小时 / 日出时分" maxlength="60">
+            </div>
+            <div class="form-group" id="photoFocalField" style="display:none;">
+              <label>焦段提示</label>
+              <input type="text" id="formFocalLength" placeholder="如：16-35mm / 24-70mm" maxlength="60">
+            </div>
+            <!-- 备注 -->
+            <div class="form-group">
+              <label>备注信息</label>
+              <textarea id="formNotes" placeholder="自由填写任何额外信息..." rows="3"></textarea>
+            </div>
+            <!-- 图片上传 -->
+            <div class="form-group">
+              <label>绑定图片（可多张，自动压缩存储）</label>
+              <div class="image-upload-area" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📷</div>
+                <p>点击上传图片（支持JPG/PNG）</p>
+              </div>
+              <input type="file" id="fileInput" accept="image/*" multiple style="display:none;" onchange="handleImageUpload(event)">
+              <div class="image-preview-grid" id="imagePreviewGrid"></div>
+            </div>
+            <!-- 坐标显示 -->
+            <div class="detail-coord">📍 坐标：${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
+            <!-- 操作按钮 -->
+            <div class="form-actions">
+              <button class="btn" onclick="closePanel()">取消</button>
+              <button class="btn btn-save-food" id="saveBtn" onclick="saveNewPoint()">保存点位</button>
+            </div>
+          `;
+            // 初始化预览
+            updateImagePreview();
+            // 设置保存按钮样式
+            updateSaveButtonStyle();
+        }
+
+        /** 渲染编辑表单 */
+        function renderEditForm(point) {
+            const body = document.getElementById('panelBody');
+            const isFood = point.type === 'food';
+            body.innerHTML = `
+            <div class="type-toggle-group">
+              <button class="type-toggle-btn food-btn ${isFood ? 'active-food' : ''}" id="typeFoodBtn" onclick="setFormType('food')">
+                <span class="toggle-dot"></span> 美食点位
+              </button>
+              <button class="type-toggle-btn photo-btn ${!isFood ? 'active-photo' : ''}" id="typePhotoBtn" onclick="setFormType('photo')">
+                <span class="toggle-dot"></span> 摄影机位
+              </button>
+            </div>
+            <div class="form-group">
+              <label>点位名称 *</label>
+              <input type="text" id="formName" value="${escapeHtml(point.name)}" maxlength="60">
+            </div>
+            <div class="form-group" id="foodFields" style="${isFood ? '' : 'display:none;'}">
+              <label>推荐菜品</label>
+              <input type="text" id="formDishes" value="${escapeHtml(point.dishes || '')}" maxlength="100">
+            </div>
+            <div class="form-group" id="foodHoursField" style="${isFood ? '' : 'display:none;'}">
+              <label>营业时间</label>
+              <input type="text" id="formHours" value="${escapeHtml(point.hours || '')}" maxlength="50">
+            </div>
+            <div class="form-group" id="photoFields" style="${!isFood ? '' : 'display:none;'}">
+              <label>最佳拍摄时间</label>
+              <input type="text" id="formBestTime" value="${escapeHtml(point.bestTime || '')}" maxlength="60">
+            </div>
+            <div class="form-group" id="photoFocalField" style="${!isFood ? '' : 'display:none;'}">
+              <label>焦段提示</label>
+              <input type="text" id="formFocalLength" value="${escapeHtml(point.focalLength || '')}" maxlength="60">
+            </div>
+            <div class="form-group">
+              <label>备注信息</label>
+              <textarea id="formNotes" rows="3">${escapeHtml(point.notes || '')}</textarea>
+            </div>
+            <div class="form-group">
+              <label>绑定图片</label>
+              <div class="image-upload-area" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📷</div>
+                <p>点击上传更多图片</p>
+              </div>
+              <input type="file" id="fileInput" accept="image/*" multiple style="display:none;" onchange="handleImageUpload(event)">
+              <div class="image-preview-grid" id="imagePreviewGrid"></div>
+            </div>
+            <div class="form-group">
+              <label>坐标（可手动微调）</label>
+              <input type="text" id="formLat" value="${point.lat}" placeholder="纬度">
+              <input type="text" id="formLng" value="${point.lng}" placeholder="经度" style="margin-top:6px;">
+            </div>
+            <div class="detail-coord">创建于：${formatTime(point.createdAt)}</div>
+            <div class="form-actions">
+              <button class="btn" onclick="openViewPanel('${point.id}')">返回</button>
+              <button class="btn btn-save-food" id="saveBtn" onclick="saveEditedPoint('${point.id}')">保存修改</button>
+            </div>
+          `;
+            updateImagePreview();
+            updateSaveButtonStyle();
+        }
+
+        /** 渲染详情视图 */
+        function renderViewDetail(point) {
+            const body = document.getElementById('panelBody');
+            const isFood = point.type === 'food';
+            const badgeClass = isFood ? 'badge-food' : 'badge-photo';
+            const badgeText = isFood ? '🍜 美食点位' : '📷 摄影机位';
+
+            let imagesHtml = '';
+            if (point.images && point.images.length > 0) {
+                imagesHtml = `<div class="detail-images">` + point.images.map((img, idx) =>
+                    `<img src="${img}" alt="图片${idx + 1}" onclick="window.open('${img}', '_blank')">`
+                ).join('') + `</div>`;
+            }
+
+            let extraFieldsHtml = '';
+            if (isFood) {
+                if (point.dishes) {
+                    extraFieldsHtml +=
+                        `<div class="detail-field"><span class="field-label">🍽️ 推荐菜品</span><span class="field-value">${escapeHtml(point.dishes)}</span></div>`;
+                }
+                if (point.hours) {
+                    extraFieldsHtml +=
+                        `<div class="detail-field"><span class="field-label">🕐 营业时间</span><span class="field-value">${escapeHtml(point.hours)}</span></div>`;
+                }
+            } else {
+                if (point.bestTime) {
+                    extraFieldsHtml +=
+                        `<div class="detail-field"><span class="field-label">⏰ 最佳拍摄时间</span><span class="field-value">${escapeHtml(point.bestTime)}</span></div>`;
+                }
+                if (point.focalLength) {
+                    extraFieldsHtml +=
+                        `<div class="detail-field"><span class="field-label">🔭 焦段提示</span><span class="field-value">${escapeHtml(point.focalLength)}</span></div>`;
+                }
+            }
+
+            body.innerHTML = `
+            <span class="detail-type-badge ${badgeClass}">${badgeText}</span>
+            <div class="detail-name">${escapeHtml(point.name)}</div>
+            ${extraFieldsHtml}
+            ${point.notes ? `<div class="detail-field"><span class="field-label">📝 备注</span><span class="field-value">${escapeHtml(point.notes)}</span></div>` : ''}
+            ${imagesHtml}
+            <div class="detail-coord">📍 坐标：${point.lat.toFixed(5)}, ${point.lng.toFixed(5)} &nbsp;|&nbsp; 🕐 创建：${formatTime(point.createdAt)}</div>
+            <div class="detail-actions">
+              <button class="btn" onclick="openEditPanel('${point.id}')">✏️ 编辑</button>
+              <button class="btn btn-danger" onclick="deletePoint('${point.id}')">🗑️ 删除</button>
+              <button class="btn" onclick="closePanel()">关闭</button>
+            </div>
+          `;
+        }
+
+        /** HTML转义函数，防止XSS */
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        /** 设置表单类型 */
+        window.setFormType = function(type) {
+            currentFormType = type;
+            const isFood = type === 'food';
+            document.getElementById('foodFields').style.display = isFood ? '' : 'none';
+            document.getElementById('foodHoursField').style.display = isFood ? '' : 'none';
+            document.getElementById('photoFields').style.display = !isFood ? '' : 'none';
+            document.getElementById('photoFocalField').style.display = !isFood ? '' : 'none';
+            // 更新toggle按钮样式
+            document.getElementById('typeFoodBtn').classList.toggle('active-food', isFood);
+            document.getElementById('typeFoodBtn').classList.remove('active-photo');
+            document.getElementById('typePhotoBtn').classList.toggle('active-photo', !isFood);
+            document.getElementById('typePhotoBtn').classList.remove('active-food');
+            updateSaveButtonStyle();
+        };
+
+        /** 更新保存按钮样式 */
+        function updateSaveButtonStyle() {
+            const saveBtn = document.getElementById('saveBtn');
+            if (!saveBtn) return;
+            saveBtn.classList.remove('btn-save-food', 'btn-save-photo');
+            if (currentFormType === 'food') {
+                saveBtn.classList.add('btn-save-food');
+                saveBtn.textContent = '保存美食点位';
+            } else {
+                saveBtn.classList.add('btn-save-photo');
+                saveBtn.textContent = '保存摄影机位';
+            }
+        }
+
+        // ==================== 图片处理 ====================
+        /** 处理图片上传 */
+        window.handleImageUpload = async function(event) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0) return;
+
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) continue;
+                try {
+                    const compressed = await compressImage(file, 800, 0.72);
+                    tempFormImages.push(compressed);
+                } catch (e) {
+                    console.error('图片压缩失败:', e);
+                }
+            }
+            // 清空input以便重新选择相同文件
+            event.target.value = '';
+            updateImagePreview();
+        };
+
+        /** 更新图片预览网格 */
+        function updateImagePreview() {
+            const grid = document.getElementById('imagePreviewGrid');
+            if (!grid) return;
+            if (tempFormImages.length === 0) {
+                grid.innerHTML = '';
+                return;
+            }
+            grid.innerHTML = tempFormImages.map((img, idx) =>
+                `<div class="image-preview-item">
+              <img src="${img}" alt="预览${idx + 1}">
+              <button class="remove-img-btn" onclick="removeTempImage(${idx})" title="移除图片">✕</button>
+            </div>`
+            ).join('');
+        }
+
+        /** 移除临时图片 */
+        window.removeTempImage = function(index) {
+            tempFormImages.splice(index, 1);
+            updateImagePreview();
+        };
+
+        // ==================== 保存与删除操作 ====================
+        /** 保存新点位 */
+        window.saveNewPoint = function() {
+            const name = document.getElementById('formName').value.trim();
+            if (!name) {
+                alert('⚠️ 请输入点位名称');
+                document.getElementById('formName').focus();
+                return;
+            }
+            if (!currentPanelLatLng) {
+                alert('⚠️ 缺少坐标信息');
+                return;
+            }
+
+            const point = {
+                id: generateId(),
+                type: currentFormType,
+                name: name,
+                lat: currentPanelLatLng.lat,
+                lng: currentPanelLatLng.lng,
+                notes: document.getElementById('formNotes').value.trim(),
+                images: [...tempFormImages],
+                // 美食字段
+                dishes: currentFormType === 'food' ? document.getElementById('formDishes').value.trim() : undefined,
+                hours: currentFormType === 'food' ? document.getElementById('formHours').value.trim() : undefined,
+                // 摄影字段
+                bestTime: currentFormType === 'photo' ? document.getElementById('formBestTime').value.trim() :
+                    undefined,
+                focalLength: currentFormType === 'photo' ? document.getElementById('formFocalLength').value.trim() :
+                    undefined,
+                createdAt: getTimestamp(),
+            };
+
+            allPoints.push(point);
+            saveToStorage();
+            updateMarkerForPoint(point.id);
+            closePanel();
+            // 可选：直接打开详情
+            // setTimeout(() => openViewPanel(point.id), 300);
+        };
+
+        /** 保存编辑后的点位 */
+        window.saveEditedPoint = function(pointId) {
+            const point = allPoints.find(p => p.id === pointId);
+            if (!point) return;
+
+            const name = document.getElementById('formName').value.trim();
+            if (!name) {
+                alert('⚠️ 请输入点位名称');
+                return;
+            }
+
+            const lat = parseFloat(document.getElementById('formLat').value);
+            const lng = parseFloat(document.getElementById('formLng').value);
+            if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                alert('⚠️ 请输入有效的经纬度坐标');
+                return;
+            }
+
+            point.name = name;
+            point.type = currentFormType;
+            point.lat = lat;
+            point.lng = lng;
+            point.notes = document.getElementById('formNotes').value.trim();
+            point.images = [...tempFormImages];
+            // 更新类型专属字段
+            if (currentFormType === 'food') {
+                point.dishes = document.getElementById('formDishes').value.trim();
+                point.hours = document.getElementById('formHours').value.trim();
+                delete point.bestTime;
+                delete point.focalLength;
+            } else {
+                point.bestTime = document.getElementById('formBestTime').value.trim();
+                point.focalLength = document.getElementById('formFocalLength').value.trim();
+                delete point.dishes;
+                delete point.hours;
+            }
+
+            saveToStorage();
+            updateMarkerForPoint(point.id);
+            closePanel();
+        };
+
+        /** 删除点位 */
+        window.deletePoint = function(pointId) {
+            if (!confirm('确定要删除这个点位吗？此操作不可撤销。')) return;
+            allPoints = allPoints.filter(p => p.id !== pointId);
+            saveToStorage();
+            // 移除地图标记
+            if (activeMarkers[pointId]) {
+                map.removeLayer(activeMarkers[pointId]);
+                delete activeMarkers[pointId];
+            }
+            closePanel();
+        };
+
+        // ==================== 筛选功能 ====================
+        document.getElementById('filterFoodBtn').addEventListener('click', function() {
+            filterFoodVisible = !filterFoodVisible;
+            this.classList.toggle('active-food', filterFoodVisible);
+            renderAllMarkers();
+        });
+        document.getElementById('filterPhotoBtn').addEventListener('click', function() {
+            filterPhotoVisible = !filterPhotoVisible;
+            this.classList.toggle('active-photo', filterPhotoVisible);
+            renderAllMarkers();
+        });
+
+        // ==================== 面板关闭事件 ====================
+        document.getElementById('panelCloseBtn').addEventListener('click', closePanel);
+        document.getElementById('panelOverlay').addEventListener('click', closePanel);
+
+        // ==================== 定位到青岛 ====================
+        document.getElementById('locateBtn').addEventListener('click', function() {
+            map.flyTo(QINGDAO_CENTER, DEFAULT_ZOOM, { duration: 1.2 });
+        });
+
+        // ==================== 导出功能 ====================
+        document.getElementById('exportBtn').addEventListener('click', function() {
+            if (allPoints.length === 0) {
+                alert('⚠️ 暂无数据可导出');
+                return;
+            }
+            const json = JSON.stringify(allPoints, null, 2);
+            const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const now = new Date();
+            const filename = 'qingdao-map-points-' +
+                now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') +
+                String(now.getDate()).padStart(2, '0') + '-' +
+                String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0') + '.json';
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        });
+
+        // ==================== 导入功能 ====================
+        document.getElementById('importBtn').addEventListener('click', function() {
+            document.getElementById('importFileInput').click();
+        });
+        document.getElementById('importFileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    if (!Array.isArray(data)) {
+                        alert('⚠️ 文件格式不正确，应为点位数组JSON');
+                        return;
+                    }
+                    if (!confirm(`导入 ${data.length} 个点位？将替换当前所有数据。`)) return;
+                    allPoints = data;
+                    saveToStorage();
+                    renderAllMarkers();
+                    alert('✅ 导入成功！');
+                } catch (err) {
+                    alert('⚠️ 文件解析失败，请检查JSON格式');
+                    console.error(err);
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+        });
+
+        // ==================== 响应式监听 ====================
+        window.addEventListener('resize', function() {
+            // 重新渲染标记以适配尺寸
+            renderAllMarkers();
+        });
+
+        // ==================== 键盘快捷键 ====================
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closePanel();
+            }
+        });
+
+        // ==================== 应用初始化 ====================
+        function initApp() {
+            loadFromStorage();
+            initMap();
+            console.log('✅ 青岛美食·摄影机位地图已加载');
+            console.log(`📊 当前共 ${allPoints.length} 个点位`);
+            console.log('💡 使用提示：点击地图空白处添加点位，点击已有点位查看详情');
+        }
+
+        // 启动应用
+        initApp();
+    </script>
+</body>
+</html>
